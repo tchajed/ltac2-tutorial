@@ -6,11 +6,9 @@ services:
   - docker
 
 env:
-  global:
-  - NJOBS="2"
   jobs:
-  - COQ_VERSION="dev"
-  - COQ_VERSION="8.11"
+    - COQ_VERSION="dev"
+    - COQ_VERSION="8.11"
 
 install: |
   docker run -d -i --init --name=COQ -v ${TRAVIS_BUILD_DIR}:/home/coq/build -w /home/coq/build coqorg/coq:${COQ_VERSION}
@@ -23,15 +21,15 @@ install: |
     opam list
     "
 before_script:
-- |
-  docker exec COQ /bin/bash --login -c "
-    export PS4='+ \e[33;1m(\$0 @ line \$LINENO) \$\e[0m '
-    sudo chown -R coq:coq /home/coq/build
-    "
+  - |
+    docker exec COQ /bin/bash --login -c "
+      export PS4='+ \e[33;1m(\$0 @ line \$LINENO) \$\e[0m '
+      sudo chown -R coq:coq /home/coq/build
+      "
 script:
-- echo -e "${ANSI_YELLOW}Building ${TRAVIS_REPO_SLUG}...${ANSI_RESET}" && echo -en 'travis_fold:start:build\\r'
-- docker exec COQ /bin/bash --login -c "make -j${NJOBS} -k"
-- echo -en 'travis_fold:end:build\\r'
+  - echo -e "${ANSI_YELLOW}Building ${TRAVIS_REPO_SLUG}...${ANSI_RESET}" && echo -en 'travis_fold:start:build\\r'
+  - docker exec COQ /bin/bash --login -c "make -j2 -k"
+  - echo -en 'travis_fold:end:build\\r'
 
 after_script:
-- docker stop COQ
+  - docker stop COQ
