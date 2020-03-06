@@ -196,7 +196,7 @@ Abort.
 (* this is really easy in a script - just do ltac1:(...) *)
 
 Ltac foo := ltac2:(1).
-(* Without this, in the above you get an error "The following expression should
+(* Without this, in the above you get a warning "The following expression should
 have type unit." with no attached location. We should report this as a bug -
 this message is useless as a warning. *)
 Set Warnings "+not-unit".
@@ -215,9 +215,10 @@ Ltac2 Notation "replace" lhs(constr) "with" rhs(constr) :=
 
 (* The FFI to call into Ltac2 is to call an Ltac2 expression of type unit that
 solves a goal. There is a mechanism to pass arguments, which are represented as
-dynamically-typed values of type Ltac1.t. These can be run as tactics or
-converted to/from constrs and lists (note that this means Ltac1 ints, strings,
-and idents cannot be used - this is probably just an oversight in the API). *)
+dynamically-typed values of type Ltac1.t (this is just the reverse of the
+above). These can be run as tactics or converted to/from constrs and lists (note
+that this means Ltac1 ints and strings cannot be used - this is probably just an
+oversight in the API). *)
 
 Ltac2 add1 (n:constr) := constr:(1 + $n).
 Ltac add1 :=
@@ -250,6 +251,47 @@ Ltac2 explain_abc abc :=
   end.
 
 Print Ltac2 explain_abc.
+
+(*! Exceptions *)
+
+(* Ltac2 has good support for exceptions. The support is based on the [exn]
+_open type_, which supports dynamic extension and thus eliminating exn always
+requires a catch-all case. You can create your own open types in Ltac2, but
+let's focus on this one. *)
+
+Ltac2 Type exn ::= [ MyNewException(string) ].
+
+(* the simplest thing we can do with the new exception is to panic/throw it,
+which is unrecoverable *)
+
+Goal True.
+  Fail Control.throw (MyNewException ("oops")).
+  (*  Uncaught Ltac2 exception: MyNewException ("oops") *)
+Abort.
+
+(* Ltac2 also has first-class backtracking via exceptions *)
+
+(* The refman explains this support as "viewing thunks as lazy lists", and then
+the zero and plus operators are the empty list and concatenation operators, and
+also these are a monoid. I don't really understand this, but here's an example
+of a "backtracking string" and how you can view it as a list of two strings: *)
+
+Ltac2 x_or_y () := Control.plus (fun () => "x") (fun _ => "y").
+
+Ltac2 get_x_and_y () :=
+  match Control.case x_or_y with
+  | Val xyf => let (x, yf) := xyf in
+               (x, yf Not_found)
+  | Err exn => Control.throw exn
+end.
+
+Ltac2 Eval get_x_and_y ().
+
+(* I think this is really powerful? *)
+
+(* One limitation I can see is that exceptions aren't typed: there's a single
+dynamic type with all the exceptions, and all Ltac2 code is in a single effect,
+one with exceptions and a proofview. *)
 
 (*! Reading the Ltac2 source *)
 
