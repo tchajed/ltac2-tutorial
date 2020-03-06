@@ -1,8 +1,14 @@
-(* An Ltac2 tutorial, reflecting the current "state of the art." *)
+(*** An Ltac2 tutorial *)
 
-(* You could also ahead and read the refman Ltac2 reference. You might
-remember it when you get confused. However, it will not teach you Ltac2, hence
-this guide. *)
+(* You could also ahead and read the refman Ltac2 reference:
+https://coq.github.io/doc/master/refman/proof-engine/ltac2.html. It's good to
+just get a sense of the features and some of the terminology. However, it will
+not teach you Ltac2, hence this guide. *)
+
+(* This tutorial aims to be pragmatic, but it is not specific to an application.
+The pragmatics of Ltac2 are likely to change, as the language becomes more
+usable. Picking an application and really trying to use Ltac2 for it is likely
+to uncover more tricks and bug reports necessary to make the language work. *)
 
 (* The first thing to learn is how to import Ltac2. This was recently added to
 the reference manual. *)
@@ -13,8 +19,7 @@ From Ltac2 Require Option.
 language for new proofs.
 
 In 8.11.0 loading Ltac2 triggered several bugs, which should be fixed in
-8.11.1.
- *)
+8.11.1. *)
 
 (* Ltac2 definitions are values, typically functions in the tactic monad that
 produce values but potentially constants. Here's a function that's a bit like
@@ -306,11 +311,11 @@ it's definition - it's defined as [Ltac2 Type message], which means it comes
 from OCaml. That's fine, it's opaque anyway.
 
 In Message.v we see one eliminator (print), a few constructors for Ltac2
-primitives, and concatenation. This also tells us that there's no printf.
- *)
+primitives, and concatenation. This also tells us that there's no printf. *)
 
 (* Now let's try something harder. Let's solve
-https://github.com/coq/coq/issues/11641 - namely, let's implement [Ltac2 change (a:constr) (b:constr)].
+https://github.com/coq/coq/issues/11641 - namely, let's implement [Ltac2 change
+(a:constr) (b:constr)].
 
 First let's figure out where [change] is exposed in Ltac2 - we expect to find a
 primitive Ltac2 tactic and an Ltac2 notation. The notation is in [Notations.v],
@@ -318,8 +323,8 @@ and it ultimately calls [Std.change].
 
 Here's the definition of change (for its type signature):
 
-[Ltac2 @ external change : pattern option -> (constr array -> constr) -> clause ->
-unit := "ltac2" "tac_change".]
+[Ltac2 @ external change : pattern option -> (constr array -> constr) -> clause
+-> unit := "ltac2" "tac_change".]
 
 This takes a pattern option for the thing to change, a (constr array -> constr)
 for the right-hand side (the argument is stuff bound by the pattern), and an
