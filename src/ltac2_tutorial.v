@@ -35,6 +35,20 @@ Ltac2 idtac' := fun p => match p with
                          | () => ()
                          end.
 
+(*! Hello world *)
+
+(* We can print things in Ltac2, using tools from the Message library. *)
+
+Ltac2 hello_world () := Message.print (Message.of_string "Hello, world!").
+
+Goal True.
+  hello_world ().
+Abort.
+
+(* We can also evaluate Ltac2 expressions: *)
+
+Ltac2 Eval hello_world ().
+
 (*! Variables *)
 
 (* Ltac2 requires much more precise notation to access variables from
@@ -68,6 +82,37 @@ idents, and patterns, for example. *)
 there were dynamic heuristics to decide whether something was an Ltac1 variable
 or a Gallina identifier, for example. *)
 
+(* Here's an illustration of this: *)
+Inductive boole := fact | lie.
+
+(* this doesn't do what it looks like - the fact argument to exact is a constr,
+and the boole constructor gets "internalized" (internalization is static
+compilation, evaluation is dynamic), while the fact Ltac2-level argument is unused. *)
+Ltac2 solve_with := fun fact => exact fact.
+Print Ltac2 solve_with. (* note type is 'a -> unit *)
+
+(* we need to use $ to refer to the fact argument *)
+Ltac2 solve_with_correct := fun (fact:constr) => exact $fact.
+Goal True.
+  (* to pass [I] as a constr, we use ', which is a shorthand for the open_constr
+  antiquotation (we could have written [constr:(I)], but that's longer). *)
+  solve_with_correct 'I.
+Qed.
+
+(* In Ltac1 you may get either the bound variable or the global reference. Here,
+you get the variable: *)
+Ltac solve_with := fun fact => exact fact.
+Goal True.
+  ltac1:(solve_with I).
+Qed.
+
+(* What if we wanted to refer to the global fact of type boole? This still
+doesn't work (it still solves the goal using the argument): *)
+Ltac solve_with_fact := fun fact => let x := constr:(fact) in exact x.
+Goal boole.
+  Fail ltac1:(solve_with_fact true).
+Abort.
+
 (*! Pretyping *)
 
 (* When you use an ltac2-in-term for a notation (note: this is my made-up
@@ -96,7 +141,12 @@ Print foo.
 (* ...and even this *)
 Notation get_y := ltac2:(let y := &y in exact $y) (only parsing).
 Definition foo' := with_y get_y.
-Print foo'.
+Example foo'_is : foo' = fun (y: nat) => y
+  := eq_refl.
+
+Definition foo'' := with_y (get_y + 1).
+Example foo''_is : foo'' = fun y => y + 1
+  := eq_refl.
 
 (*! Goal and constr matching *)
 
