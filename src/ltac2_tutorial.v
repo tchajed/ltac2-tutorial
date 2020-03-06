@@ -1,24 +1,97 @@
-(* The first thing to learn is how to import Ltac2. *)
-From Ltac2 Require Import Ltac2.
+(* An Ltac2 tutorial, reflecting the current "state of the art." *)
 
-(* If you don't have this, sometimes you'll get a "the following expression
-should be of type unit" with no attached expression. *)
-Set Warnings "+not-unit".
+(* You could also ahead and read the refman Ltac2 reference. You might
+remember it when you get confused. However, it will not teach you Ltac2, hence
+this guide. *)
+
+(* The first thing to learn is how to import Ltac2. This was recently added to
+the reference manual. *)
+From Ltac2 Require Import Ltac2.
+From Ltac2 Require Option.
+
+(* The act of importing Ltac2 loads the plugin and makes Ltac2 the default
+language for new proofs.
+
+In 8.11.0 loading Ltac2 triggered several bugs, which should be fixed in
+8.11.1.
+ *)
 
 (* Ltac2 definitions are values, typically functions in the tactic monad that
 produce values but potentially constants. Here's a function that's a bit like
 Ltac1 [idtac] without the printing support, but note that it is explicitly
-thunked. *)
+thunked.
+
+This was the first example I wrote, but note that it isn't actually useful - you
+should just use () where you absolutely needed idtac in Ltac1 (eg, in a match
+pattern that should do nothing). *)
 Ltac2 idtac () := ().
 (* here's what the above desugars to: *)
 Ltac2 idtac' := fun p => match p with
-                      | () => ()
-                      end.
+                         | () => ()
+                         end.
 
 (*! Variables *)
 
-(* TODO: explain x, @x, &x and $x *)
-(* TODO: explain how this used to work in Ltac1 *)
+(* Ltac2 requires much more precise notation to access variables from
+the various contexts - there are Ltac2 variables, Gallina references, and the
+dynamic goal environment, for example. *)
+
+(* These notations are generally instances of a more general antiquotation
+feature for accessing various sub-languages, including for creating constrs,
+idents, and patterns, for example. *)
+
+(* There are four ways to reference a variable:
+  - x refers to an Ltac2 variable as-is, within another Ltac2 expression.
+  - @x is the same as ident:(x) - it produces an ident for "x"
+  - &x is used to refer to a dynamic name. Think of it as x, but it resolves the
+    name entirely dynamically. It has two definitions:
+     - as an Ltac2 expression, it means [Control.hyp @x], referring to the
+       name "x" in the dynamic environment. Note this isn't the same as
+       Control.hyp x, which looks up an Ltac2 variable x of type ident.
+     - in a constr, it expands to [ltac2:(Control.refine (fun () =>
+       Control.hyp @x))]. This is more-or-less the same as the above, but has to
+       escape to Ltac2 and back to actually do the lookup.
+  - $x refers to an Ltac2 variable x of type constr within a constr:(...)
+    antiquotation. It is equivalent to [ltac2:(Control.refine (fun () => x))].
+    This is more necessary than it would seem since sometimes an Ltac2 notation
+    accepts a constr, so inserting a variable requires this escape.
+
+  I constantly get these mixed up.
+ *)
+
+(* Where did all of this complexity come from? In Ltac1, it was actually worse -
+there were dynamic heuristics to decide whether something was an Ltac1 variable
+or a Gallina identifier, for example. *)
+
+(*! Pretyping *)
+
+(* When you use an ltac2-in-term for a notation (note: this is my made-up
+terminology, the refman roughly says "when an Ltac2 antiquotation appears inside
+a Coq term notation"), then notation variables are bound to Ltac2 variables of
+type preterm. Basically you have to pretype them into constrs, but we can modify
+the environment before doing so: *)
+
+(* this the identity, where we just pretype the input and return it (by
+solving the antiquotation goal) *)
+Notation fancy_identity x := ltac2:(let x := Constr.pretype x in exact $x) (only parsing).
+(* Now we're going to do something crazy: pretype the preterm with y bound: *)
+Notation with_y x :=
+  ltac2:(Control.refine
+           (fun _ =>
+              constr:(fun (y:nat) =>
+                        ltac2:(Control.refine
+                                 (fun _ => Constr.pretype x))))) (only parsing).
+(* sadly this doesn't work *)
+Fail Definition foo := with_y y.
+
+(* ...but this does *)
+Definition foo := with_y ltac2:(let x := &y in exact $x).
+Print foo.
+
+(* ...and even this *)
+Notation get_y := ltac2:(let y := &y in exact $y) (only parsing).
+Definition foo' := with_y get_y.
+Print foo'.
 
 (*! Goal and constr matching *)
 
@@ -82,13 +155,13 @@ variables. *)
 (* inversion is complicated in general, and we have to figure out what the
 simple usage about corresponds to *)
 Ltac invc H := inversion H; subst; clear H.
-Local Ltac2 invc (h: ident) :=
+Ltac2 invc (h: ident) :=
   Std.inversion Std.FullInversion (Std.ElimOnIdent h) None None;
   Std.subst_all ();
   Std.clear [h].
 
 (* here are tons of wrong ways *)
-Local Ltac2 invc' (h: ident) :=
+Ltac2 invc' (h: ident) :=
   (* this seems right, but it does inversion on a constr whose value is the
   hypothesis, generating a new copy (the original is cleared by clear $h) *)
   let h' := Control.hyp h in
@@ -96,11 +169,11 @@ Local Ltac2 invc' (h: ident) :=
   here *)
   inversion $h'; subst; clear $h.
 
-Local Ltac2 invc_bad2 (h: ident) :=
+Ltac2 invc_bad2 (h: ident) :=
   (* h is parsed as an ident, it's not a variable *)
   inversion h; subst; Std.clear [h].
 
-Local Ltac2 invc_bad1 (h: ident) :=
+Ltac2 invc_bad1 (h: ident) :=
   (* we're asking for literally the name h, in a convoluted way (we're getting Control.hyp @h) *)
   inversion &h; subst; Std.clear [h].
 
@@ -122,6 +195,14 @@ Abort.
 
 (* this is really easy in a script - just do ltac1:(...) *)
 
+Ltac foo := ltac2:(1).
+(* Without this, in the above you get an error "The following expression should
+have type unit." with no attached location. We should report this as a bug -
+this message is useless as a warning. *)
+Set Warnings "+not-unit".
+
+Fail Ltac foo' := ltac2:(Std.change).
+
 (* wrapping functions is possible but a bit obscure, because we have to take the
 arguments in Ltac2 and pass them as dynamic values to Ltac1. *)
 Local Ltac2 replace_with (lhs: constr) (rhs: constr) :=
@@ -137,6 +218,12 @@ solves a goal. There is a mechanism to pass arguments, which are represented as
 dynamically-typed values of type Ltac1.t. These can be run as tactics or
 converted to/from constrs and lists (note that this means Ltac1 ints, strings,
 and idents cannot be used - this is probably just an oversight in the API). *)
+
+Ltac2 add1 (n:constr) := constr:(1 + $n).
+Ltac add1 :=
+  ltac2:(n |- let n := Option.get (Ltac1.to_constr n) in
+              let n_plus_1 := add1 n in
+              exact $n_plus_1).
 
 (*! Datatypes in Ltac2 *)
 
