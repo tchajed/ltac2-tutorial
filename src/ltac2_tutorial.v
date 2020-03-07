@@ -18,8 +18,8 @@ From Ltac2 Require Option.
 (* The act of importing Ltac2 loads the plugin and makes Ltac2 the default
 language for new proofs.
 
-In 8.11.0 loading Ltac2 triggered several bugs, which should be fixed in
-8.11.1. *)
+ In 8.11.0 loading Ltac2 triggered several bugs, which should be fixed in
+ 8.11.1. *)
 
 (* Ltac2 definitions are values, typically functions in the tactic monad that
 produce values but potentially constants. Here's a function that's a bit like
@@ -35,7 +35,8 @@ Ltac2 idtac' := fun p => match p with
                          | () => ()
                          end.
 
-(*! Hello world *)
+(******************************************************************************)
+(*+ Hello world **)
 
 (* We can print things in Ltac2, using tools from the Message library. *)
 
@@ -49,7 +50,8 @@ Abort.
 
 Ltac2 Eval hello_world ().
 
-(*! Variables *)
+(******************************************************************************)
+(*+ Variables *)
 
 (* Ltac2 requires much more precise notation to access variables from
 the various contexts - there are Ltac2 variables, Gallina references, and the
@@ -82,6 +84,7 @@ idents, and patterns, for example. *)
 there were dynamic heuristics to decide whether something was an Ltac1 variable
 or a Gallina identifier, for example. *)
 
+(****************************************************************************)
 (* Here's an illustration of this: *)
 Inductive boole := fact | lie.
 
@@ -113,7 +116,8 @@ Goal boole.
   Fail ltac1:(solve_with_fact true).
 Abort.
 
-(*! Pretyping *)
+(****************************************************************************)
+(*+ Pretyping *)
 
 (* When you use an ltac2-in-term for a notation (note: this is my made-up
 terminology, the refman roughly says "when an Ltac2 antiquotation appears inside
@@ -148,7 +152,8 @@ Definition foo'' := with_y (get_y + 1).
 Example foo''_is : foo'' = fun y => y + 1
   := eq_refl.
 
-(*! Goal and constr matching *)
+(******************************************************************************)
+(*+ Goal and constr matching *)
 
 Ltac2 show_type () :=
   (* this is desugared into something more primitive from Pattern *)
@@ -200,7 +205,8 @@ Proof.
   end.
 Abort.
 
-(*! Standard library tactics *)
+(******************************************************************************)
+(*+ Standard library tactics *)
 
 (* Ltac1 ML tactics are generally exported as an Ltac2 tactic, then wrapped in
 an Ltac2 notation for rough compatibility. Unfortunately these notations aren't
@@ -246,7 +252,8 @@ Proof.
   (* this didn't exactly work, since it created a new H0 *)
 Abort.
 
-(*! Calling Ltac1 from Ltac2 *)
+(******************************************************************************)
+(*+ Calling Ltac1 from Ltac2 *)
 
 (* this is really easy in a script - just do ltac1:(...) *)
 
@@ -281,7 +288,8 @@ Ltac add1 :=
               let n_plus_1 := add1 n in
               exact $n_plus_1).
 
-(*! Datatypes in Ltac2 *)
+(******************************************************************************)
+(*+ Datatypes in Ltac2 *)
 
 (* you can create new datatypes in Ltac2 *)
 Ltac2 Type ABC := [A | B(bool) | C(constr)].
@@ -348,7 +356,8 @@ Ltac2 Eval get_x_and_y ().
 dynamic type with all the exceptions, and all Ltac2 code is in a single effect,
 one with exceptions and a proofview. *)
 
-(*! Reading the Ltac2 source *)
+(******************************************************************************)
+(*+ Reading the Ltac2 source *)
 
 (* You will need to read the Ltac2 source
 (https://github.com/coq/coq/tree/master/user-contrib/Ltac2) to figure out how
@@ -363,6 +372,7 @@ from OCaml. That's fine, it's opaque anyway.
 In Message.v we see one eliminator (print), a few constructors for Ltac2
 primitives, and concatenation. This also tells us that there's no printf. *)
 
+(******************************************************************************)
 (* Now let's try something harder. Let's solve
 https://github.com/coq/coq/issues/11641 - namely, let's implement [Ltac2 change
 (a:constr) (b:constr)].
