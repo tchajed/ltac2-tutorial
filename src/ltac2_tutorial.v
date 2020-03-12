@@ -16,10 +16,7 @@ From Ltac2 Require Import Ltac2.
 From Ltac2 Require Option.
 
 (* The act of importing Ltac2 loads the plugin and makes Ltac2 the default
-language for new proofs.
-
- In 8.11.0 loading Ltac2 triggered several bugs, which should be fixed in
- 8.11.1. *)
+language for new proofs. *)
 
 (******************************************************************************)
 (* Ltac2 definitions are values, typically functions in the tactic monad that
@@ -233,42 +230,6 @@ Ltac2 explain_abc abc :=
 
 Print Ltac2 explain_abc.
 
-(****************************************************************************)
-(*+ Pretyping *)
-
-(* When you use an ltac2-in-term for a notation (note: this is my made-up
-terminology, the refman roughly says "when an Ltac2 antiquotation appears inside
-a Coq term notation"), then notation variables are bound to Ltac2 variables of
-type preterm. Basically you have to pretype them into constrs, but we can modify
-the environment before doing so: *)
-
-(* this the identity, where we just pretype the input and return it (by
-solving the antiquotation goal) *)
-Notation fancy_identity x := ltac2:(let x := Constr.pretype x in exact $x) (only parsing).
-(* Now we're going to do something crazy: pretype the preterm with y bound: *)
-Notation with_y x :=
-  ltac2:(Control.refine
-           (fun _ =>
-              constr:(fun (y:nat) =>
-                        ltac2:(Control.refine
-                                 (fun _ => Constr.pretype x))))) (only parsing).
-(* sadly this doesn't work *)
-Fail Definition foo := with_y y.
-
-(* ...but this does *)
-Definition foo := with_y ltac2:(let x := &y in exact $x).
-Print foo.
-
-(* ...and even this *)
-Notation get_y := ltac2:(let y := &y in exact $y) (only parsing).
-Definition foo' := with_y get_y.
-Example foo'_is : foo' = fun (y: nat) => y
-  := eq_refl.
-
-Definition foo'' := with_y (get_y + 1).
-Example foo''_is : foo'' = fun y => y + 1
-  := eq_refl.
-
 (******************************************************************************)
 (*+ Standard library tactics *)
 
@@ -374,6 +335,8 @@ Goal True.
   (*  Uncaught Ltac2 exception: MyNewException ("oops") *)
 Abort.
 
+(* Ltac2 also has first-class backtracking via exceptions *)
+
 (* The next thing we can do is backtrack over an exception, producing effects
 along the way: *)
 Ltac2 Eval
@@ -382,12 +345,23 @@ Ltac2 Eval
     Control.zero (MyNewException "oops"))
     (fun e => Message.print (Message.of_exn e)).
 
-(* Ltac2 also has first-class backtracking via exceptions *)
+(* Control.zero and Control.throw have the same type but very different
+semantics: throw produces an uncatchable exception, whereas zero produces an
+exception that supports backtracking with Contol.plus and catching with
+Control.case *)
+Fail Ltac2 Eval
+  Control.plus
+    (fun () => Message.print (Message.of_string "hello ");
+    Control.throw (MyNewException "oops"))
+    (fun e => Message.print (Message.of_exn e)).
 
-(* The refman explains this support as "viewing thunks as lazy lists", and then
+(* The refman explains backtracking as "viewing thunks as lazy lists", and then
 the zero and plus operators are the empty list and concatenation operators, and
-also these are a monoid. I don't really understand this, but here's an example
-of a "backtracking string" and how you can view it as a list of two strings: *)
+also these are a "monoid compatible with sequentialization". I don't really
+understand this.
+
+On the other hand, bhere's an example of a "backtracking string" and how you can
+view it as a list of two strings: *)
 
 Ltac2 x_or_y () := Control.plus (fun () => "x") (fun _ => "y").
 
@@ -410,7 +384,7 @@ one with exceptions and a proofview. *)
 (*+ Reading the Ltac2 source, part 2 *)
 (* Now let's try something harder. Let's solve
 https://github.com/coq/coq/issues/11641 - namely, let's implement [Ltac2 change
-(a:constr) (b:constr)].
+(a:constr) (b:constr)]. Note that we will fail, in the end.
 
 First let's figure out where [change] is exposed in Ltac2 - we expect to find a
 primitive Ltac2 tactic and an Ltac2 notation. The notation is in [Notations.v],
@@ -459,3 +433,42 @@ Instead, we really need to open an issue asking for a variant of [change] that
 operates on constrs rather than patterns (@ppedrot calls this a variant of [set]
 that does a conversion rather than posing a variable, but that explanation seems
 convoluted to me). *)
+
+(****************************************************************************)
+(*+ Pretyping *)
+
+(* note: this section is an obscure and potentially useless feature, just for
+fun *)
+
+(* When you use an ltac2-in-term for a notation (note: this is my made-up
+terminology, the refman roughly says "when an Ltac2 antiquotation appears inside
+a Coq term notation"), then notation variables are bound to Ltac2 variables of
+type preterm. Basically you have to pretype them into constrs, but we can modify
+the environment before doing so: *)
+
+(* this the identity, where we just pretype the input and return it (by
+solving the antiquotation goal) *)
+Notation fancy_identity x := ltac2:(let x := Constr.pretype x in exact $x) (only parsing).
+(* Now we're going to do something crazy: pretype the preterm with y bound: *)
+Notation with_y x :=
+  ltac2:(Control.refine
+           (fun _ =>
+              constr:(fun (y:nat) =>
+                        ltac2:(Control.refine
+                                 (fun _ => Constr.pretype x))))) (only parsing).
+(* sadly this doesn't work *)
+Fail Definition foo := with_y y.
+
+(* ...but this does *)
+Definition foo := with_y ltac2:(let x := &y in exact $x).
+Print foo.
+
+(* ...and even this *)
+Notation get_y := ltac2:(let y := &y in exact $y) (only parsing).
+Definition foo' := with_y get_y.
+Example foo'_is : foo' = fun (y: nat) => y
+  := eq_refl.
+
+Definition foo'' := with_y (get_y + 1).
+Example foo''_is : foo'' = fun y => y + 1
+  := eq_refl.
