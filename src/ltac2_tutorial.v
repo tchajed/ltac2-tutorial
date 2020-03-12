@@ -374,6 +374,14 @@ Goal True.
   (*  Uncaught Ltac2 exception: MyNewException ("oops") *)
 Abort.
 
+(* The next thing we can do is backtrack over an exception, producing effects
+along the way: *)
+Ltac2 Eval
+  Control.plus
+    (fun () => Message.print (Message.of_string "hello ");
+    Control.zero (MyNewException "oops"))
+    (fun e => Message.print (Message.of_exn e)).
+
 (* Ltac2 also has first-class backtracking via exceptions *)
 
 (* The refman explains this support as "viewing thunks as lazy lists", and then
