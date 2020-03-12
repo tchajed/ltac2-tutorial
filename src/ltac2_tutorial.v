@@ -1,14 +1,14 @@
 (*** An Ltac2 tutorial *)
 
-(* You could also ahead and read the refman Ltac2 reference:
-https://coq.github.io/doc/master/refman/proof-engine/ltac2.html. It's good to
-just get a sense of the features and some of the terminology. However, it will
-not teach you Ltac2, hence this guide. *)
-
 (* This tutorial aims to be pragmatic, but it is not specific to an application.
 The pragmatics of Ltac2 are likely to change, as the language becomes more
 usable. Picking an application and really trying to use Ltac2 for it is likely
 to uncover more tricks and bug reports necessary to make the language work. *)
+
+(* In addition, you should also go ahead and read the refman Ltac2 reference:
+https://coq.github.io/doc/master/refman/proof-engine/ltac2.html. It's good to
+just get a sense of the features and some of the terminology. However, it will
+not teach you Ltac2, hence this guide. *)
 
 (* The first thing to learn is how to import Ltac2. This was recently added to
 the reference manual. *)
@@ -21,14 +21,15 @@ language for new proofs.
  In 8.11.0 loading Ltac2 triggered several bugs, which should be fixed in
  8.11.1. *)
 
+(******************************************************************************)
 (* Ltac2 definitions are values, typically functions in the tactic monad that
 produce values but potentially constants. Here's a function that's a bit like
 Ltac1 [idtac] without the printing support, but note that it is explicitly
 thunked.
 
-This was the first example I wrote, but note that it isn't actually useful - you
-should just use () where you absolutely needed idtac in Ltac1 (eg, in a match
-pattern that should do nothing). *)
+This was the first example I wrote, but note that it isn't actually needed in
+Ltac2 - you should just use () where you absolutely needed idtac in Ltac1 (eg,
+in a match pattern that should do nothing). *)
 Ltac2 idtac () := ().
 (* here's what the above desugars to: *)
 Ltac2 idtac' := fun p => match p with
@@ -49,6 +50,22 @@ Abort.
 (* We can also evaluate Ltac2 expressions: *)
 
 Ltac2 Eval hello_world ().
+
+(******************************************************************************)
+(*+ Reading the Ltac2 source *)
+
+(* You will need to read the Ltac2 source
+(https://github.com/coq/coq/tree/master/user-contrib/Ltac2) to figure out how
+things work. This ranges from fine to totally impossible.
+
+For example, let's figure out the Message API. We open
+https://github.com/coq/coq/blob/master/user-contrib/Ltac2/Message.v and look at
+what's there. It doesn't have a type [Message.t] but just [message], so find
+it's definition - it's defined as [Ltac2 Type message], which means it comes
+from OCaml. That's fine, it's opaque anyway.
+
+In Message.v we see one eliminator (print), a few constructors for Ltac2
+primitives, and concatenation. This also tells us that there's no printf. *)
 
 (******************************************************************************)
 (*+ Variables *)
@@ -116,42 +133,6 @@ Goal boole.
   Fail ltac1:(solve_with_fact true).
 Abort.
 
-(****************************************************************************)
-(*+ Pretyping *)
-
-(* When you use an ltac2-in-term for a notation (note: this is my made-up
-terminology, the refman roughly says "when an Ltac2 antiquotation appears inside
-a Coq term notation"), then notation variables are bound to Ltac2 variables of
-type preterm. Basically you have to pretype them into constrs, but we can modify
-the environment before doing so: *)
-
-(* this the identity, where we just pretype the input and return it (by
-solving the antiquotation goal) *)
-Notation fancy_identity x := ltac2:(let x := Constr.pretype x in exact $x) (only parsing).
-(* Now we're going to do something crazy: pretype the preterm with y bound: *)
-Notation with_y x :=
-  ltac2:(Control.refine
-           (fun _ =>
-              constr:(fun (y:nat) =>
-                        ltac2:(Control.refine
-                                 (fun _ => Constr.pretype x))))) (only parsing).
-(* sadly this doesn't work *)
-Fail Definition foo := with_y y.
-
-(* ...but this does *)
-Definition foo := with_y ltac2:(let x := &y in exact $x).
-Print foo.
-
-(* ...and even this *)
-Notation get_y := ltac2:(let y := &y in exact $y) (only parsing).
-Definition foo' := with_y get_y.
-Example foo'_is : foo' = fun (y: nat) => y
-  := eq_refl.
-
-Definition foo'' := with_y (get_y + 1).
-Example foo''_is : foo'' = fun y => y + 1
-  := eq_refl.
-
 (******************************************************************************)
 (*+ Goal and constr matching *)
 
@@ -204,6 +185,69 @@ Proof.
     end
   end.
 Abort.
+
+(******************************************************************************)
+(*+ Datatypes in Ltac2 *)
+
+(* you can create new datatypes in Ltac2 *)
+Ltac2 Type ABC := [A | B(bool) | C(constr)].
+
+Ltac2 Notation x(self) "++" y(self) := Message.concat x y.
+
+(* you can annotate input types but not return types (this is an oversight and
+should be fixed); without annotations you get Hindley-Milner, inluding
+polymorphism *)
+Ltac2 msg_of_bool (b: bool) := Message.of_string
+                                 (match b with
+                                  | true => "true"
+                                  | false => "false"
+                                  end).
+
+(* explain_abc : ABC -> unit *)
+Ltac2 explain_abc abc :=
+  match abc with
+  | A => Message.print (Message.of_string "A")
+  | B b => Message.print (Message.of_string "B " ++ msg_of_bool b)
+  | C c => Message.print (Message.of_string "C " ++ Message.of_constr c)
+  end.
+
+Print Ltac2 explain_abc.
+
+(****************************************************************************)
+(*+ Pretyping *)
+
+(* When you use an ltac2-in-term for a notation (note: this is my made-up
+terminology, the refman roughly says "when an Ltac2 antiquotation appears inside
+a Coq term notation"), then notation variables are bound to Ltac2 variables of
+type preterm. Basically you have to pretype them into constrs, but we can modify
+the environment before doing so: *)
+
+(* this the identity, where we just pretype the input and return it (by
+solving the antiquotation goal) *)
+Notation fancy_identity x := ltac2:(let x := Constr.pretype x in exact $x) (only parsing).
+(* Now we're going to do something crazy: pretype the preterm with y bound: *)
+Notation with_y x :=
+  ltac2:(Control.refine
+           (fun _ =>
+              constr:(fun (y:nat) =>
+                        ltac2:(Control.refine
+                                 (fun _ => Constr.pretype x))))) (only parsing).
+(* sadly this doesn't work *)
+Fail Definition foo := with_y y.
+
+(* ...but this does *)
+Definition foo := with_y ltac2:(let x := &y in exact $x).
+Print foo.
+
+(* ...and even this *)
+Notation get_y := ltac2:(let y := &y in exact $y) (only parsing).
+Definition foo' := with_y get_y.
+Example foo'_is : foo' = fun (y: nat) => y
+  := eq_refl.
+
+Definition foo'' := with_y (get_y + 1).
+Example foo''_is : foo'' = fun y => y + 1
+  := eq_refl.
 
 (******************************************************************************)
 (*+ Standard library tactics *)
@@ -273,7 +317,8 @@ Local Ltac2 replace_with (lhs: constr) (rhs: constr) :=
 Ltac2 Notation "replace" lhs(constr) "with" rhs(constr) :=
   replace_with lhs rhs.
 
-(*! Calling Ltac2 from Ltac1 *)
+(******************************************************************************)
+(*+ Calling Ltac2 from Ltac1 *)
 
 (* The FFI to call into Ltac2 is to call an Ltac2 expression of type unit that
 solves a goal. There is a mechanism to pass arguments, which are represented as
@@ -289,33 +334,7 @@ Ltac add1 :=
               exact $n_plus_1).
 
 (******************************************************************************)
-(*+ Datatypes in Ltac2 *)
-
-(* you can create new datatypes in Ltac2 *)
-Ltac2 Type ABC := [A | B(bool) | C(constr)].
-
-Ltac2 Notation x(self) "++" y(self) := Message.concat x y.
-
-(* you can annotate input types but not return types (this is an oversight and
-should be fixed); without annotations you get Hindley-Milner, inluding
-polymorphism *)
-Ltac2 msg_of_bool (b: bool) := Message.of_string
-                                 (match b with
-                                  | true => "true"
-                                  | false => "false"
-                                  end).
-
-(* explain_abc : ABC -> unit *)
-Ltac2 explain_abc abc :=
-  match abc with
-  | A => Message.print (Message.of_string "A")
-  | B b => Message.print (Message.of_string "B " ++ msg_of_bool b)
-  | C c => Message.print (Message.of_string "C " ++ Message.of_constr c)
-  end.
-
-Print Ltac2 explain_abc.
-
-(*! Exceptions *)
+(*+ Exceptions *)
 
 (* Ltac2 has good support for exceptions. The support is based on the [exn]
 _open type_, which supports dynamic extension and thus eliminating exn always
@@ -357,22 +376,7 @@ dynamic type with all the exceptions, and all Ltac2 code is in a single effect,
 one with exceptions and a proofview. *)
 
 (******************************************************************************)
-(*+ Reading the Ltac2 source *)
-
-(* You will need to read the Ltac2 source
-(https://github.com/coq/coq/tree/master/user-contrib/Ltac2) to figure out how
-things work. This ranges from fine to totally impossible.
-
-For example, let's figure out the Message API. We open
-https://github.com/coq/coq/blob/master/user-contrib/Ltac2/Message.v and look at
-what's there. It doesn't have a type [Message.t] but just [message], so find
-it's definition - it's defined as [Ltac2 Type message], which means it comes
-from OCaml. That's fine, it's opaque anyway.
-
-In Message.v we see one eliminator (print), a few constructors for Ltac2
-primitives, and concatenation. This also tells us that there's no printf. *)
-
-(******************************************************************************)
+(*+ Reading the Ltac2 source, part 2 *)
 (* Now let's try something harder. Let's solve
 https://github.com/coq/coq/issues/11641 - namely, let's implement [Ltac2 change
 (a:constr) (b:constr)].
