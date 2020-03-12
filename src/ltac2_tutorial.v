@@ -51,6 +51,9 @@ Abort.
 
 Ltac2 Eval hello_world ().
 
+(* We can also print constrs (terms): *)
+Ltac2 Eval Message.print (Message.of_constr '(3+4)).
+
 (******************************************************************************)
 (*+ Reading the Ltac2 source *)
 
@@ -97,6 +100,18 @@ idents, and patterns, for example. *)
   I constantly get these mixed up.
  *)
 
+(* referring to a constr variable: *)
+Ltac2 bar () := let x := '(3+4) in constr:($x + 5).
+
+Section with_x.
+  Context (x:nat).
+  (* referring to a hypothesis: *)
+  Ltac2 foo () := constr:(3+&x).
+
+  Definition global_x: nat := 3.
+  Ltac2 use_global_x () := constr:(3 + global_x).
+End with_x.
+
 (* Where did all of this complexity come from? In Ltac1, it was actually worse -
 there were dynamic heuristics to decide whether something was an Ltac1 variable
 or a Gallina identifier, for example. *)
@@ -110,6 +125,11 @@ and the boole constructor gets "internalized" (internalization is static
 compilation, evaluation is dynamic), while the fact Ltac2-level argument is unused. *)
 Ltac2 solve_with := fun fact => exact fact.
 Print Ltac2 solve_with. (* note type is 'a -> unit *)
+
+(* as another illustration of internalization, here's a function that will
+create an ill-typed term, but the typechecking only happens at runtime: *)
+Ltac2 ill_typed () := constr:(3+tt).
+Fail Ltac2 Eval ill_typed ().
 
 (* we need to use $ to refer to the fact argument *)
 Ltac2 solve_with_correct := fun (fact:constr) => exact $fact.
@@ -300,6 +320,9 @@ Abort.
 (*+ Calling Ltac1 from Ltac2 *)
 
 (* this is really easy in a script - just do ltac1:(...) *)
+Goal True.
+  ltac1:(exact I).
+Qed.
 
 Ltac foo := ltac2:(1).
 (* Without this, in the above you get a warning "The following expression should
