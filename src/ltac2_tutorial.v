@@ -61,7 +61,7 @@ things work. This ranges from fine to totally impossible.
 For example, let's figure out the Message API. We open
 https://github.com/coq/coq/blob/master/user-contrib/Ltac2/Message.v and look at
 what's there. It doesn't have a type [Message.t] but just [message], so find
-it's definition - it's defined as [Ltac2 Type message], which means it comes
+its definition - it's defined as [Ltac2 Type message], which means it comes
 from OCaml. That's fine, it's opaque anyway.
 
 In Message.v we see one eliminator (print), a few constructors for Ltac2
@@ -196,9 +196,6 @@ Proof.
       (* here that's fine, but in general it can be quite nasty (due to how
       bad the primitive ML tactics are, arguably not the fault of Ltac2) *)
     | Prop => Std.clear [h]
-    (* backtracking is now via this particular exception (we don't need it here,
-     since match! will implicitly insert it as a fallback) *)
-    | _ => Control.zero Match_failure
     end
   end.
 Abort.
@@ -212,7 +209,7 @@ Ltac2 Type ABC := [A | B(bool) | C(constr)].
 Ltac2 Notation x(self) "++" y(self) := Message.concat x y.
 
 (* you can annotate input types but not return types (this is an oversight and
-should be fixed); without annotations you get Hindley-Milner, inluding
+should be fixed); without annotations you get Hindley-Milner, including
 polymorphism *)
 Ltac2 msg_of_bool (b: bool) := Message.of_string
                                  (match b with
@@ -421,7 +418,7 @@ constr, and ignore the [constr array] argument for the right-hand side of the
 change. This is the hard part. *)
 
 (* We learn from @ppedrot's answer that pattern:(...) is the right way to
-construct a pattern... but there's the only way to convert a constr to a pattern
+construct a pattern... but there the only way to convert a constr to a pattern
 is the OCaml pattern_of_constr function, which is "broken" and thus will not be
 exposed to Ltac2. *)
 
